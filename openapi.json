@@ -1,0 +1,4461 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SmartCart AI Backend API",
+    "version": "1.0.0",
+    "description": "REST API for SmartCart AI: auth, OAuth2.0, products, AI semantic search, personalized recommendations, cart, orders, payments (Stripe + COD), reviews, notifications, wishlist, support tickets (Socket.IO), admin dashboard, and Pinecone vector sync"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Register": {
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50,
+            "example": "John Doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 25,
+            "description": "Must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+            "example": "Secret@123"
+          }
+        }
+      },
+      "Login": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "ProfileUpdate": {
+        "type": "object",
+        "description": "At least one field must be provided",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 25,
+            "description": "Must contain uppercase, lowercase, number and special character"
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "required": [
+          "name",
+          "price",
+          "category"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200,
+            "example": "Wireless Mouse"
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0,
+            "example": 29.99
+          },
+          "category": {
+            "type": "string",
+            "example": "Electronics"
+          },
+          "subcategory": {
+            "type": "string",
+            "example": "Accessories"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 100
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CartAdd": {
+        "type": "object",
+        "required": [
+          "productId"
+        ],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "example": "664abc123def456"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "example": 2
+          }
+        }
+      },
+      "CartUpdate": {
+        "type": "object",
+        "required": [
+          "productId",
+          "quantity"
+        ],
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Set to 0 to remove item"
+          }
+        }
+      },
+      "Checkout": {
+        "type": "object",
+        "required": [
+          "items",
+          "shippingAddress"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "product",
+                "quantity"
+              ],
+              "properties": {
+                "product": {
+                  "type": "string",
+                  "example": "664abc123def456"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "example": 1
+                }
+              }
+            }
+          },
+          "shippingAddress": {
+            "type": "object",
+            "required": [
+              "city"
+            ],
+            "properties": {
+              "street": {
+                "type": "string",
+                "example": "123 Main St"
+              },
+              "city": {
+                "type": "string",
+                "example": "Lahore"
+              },
+              "state": {
+                "type": "string",
+                "example": "Punjab"
+              },
+              "postalCode": {
+                "type": "string",
+                "example": "54000"
+              },
+              "country": {
+                "type": "string",
+                "example": "Pakistan"
+              }
+            }
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "stripe",
+              "cod"
+            ],
+            "default": "stripe",
+            "description": "stripe = online card payment via Stripe; cod = cash on delivery"
+          }
+        }
+      },
+      "ReviewCreate": {
+        "type": "object",
+        "required": [
+          "rating",
+          "comment"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "example": 4
+          },
+          "comment": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1000,
+            "example": "Great product, very durable!"
+          }
+        }
+      },
+      "Subcategory": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Smartphones"
+          },
+          "slug": {
+            "type": "string",
+            "example": "smartphones"
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Electronics"
+          },
+          "slug": {
+            "type": "string",
+            "example": "electronics"
+          },
+          "description": {
+            "type": "string",
+            "example": "All electronic items"
+          },
+          "image": {
+            "type": "string",
+            "example": "https://cdn.example.com/electronics.jpg"
+          },
+          "subcategories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subcategory"
+            }
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "example": "664abc123def456789012345"
+          },
+          "recipientId": {
+            "type": "string",
+            "description": "MongoDB ObjectId ref to User",
+            "example": "664abc123def456789012346"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "order_status",
+              "abandoned_cart",
+              "ticket_reply",
+              "new_message",
+              "payment",
+              "ticket_assigned",
+              "general"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "example": "Your cart misses you! \ud83d\uded2"
+          },
+          "body": {
+            "type": "string",
+            "example": "Ali, only 2 items left \u2014 complete your order \ud83d\udd25"
+          },
+          "refId": {
+            "type": "string",
+            "nullable": true,
+            "description": "ObjectId of the triggering resource (Order, Ticket, Cart, or Payment)",
+            "example": "664abc123def456789012347"
+          },
+          "refModel": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "Order",
+              "Ticket",
+              "Cart",
+              "Payment"
+            ],
+            "description": "Which collection refId points to"
+          },
+          "isRead": {
+            "type": "boolean",
+            "default": false,
+            "example": false
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "firebase",
+              "socket",
+              "both"
+            ],
+            "default": "firebase",
+            "example": "firebase"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Wishlist": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "example": "664abc123def456789012348"
+          },
+          "userId": {
+            "type": "string",
+            "example": "664abc123def456789012346"
+          },
+          "products": {
+            "type": "array",
+            "description": "Fully populated product documents",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminStats": {
+        "type": "object",
+        "properties": {
+          "totalUsers": {
+            "type": "integer",
+            "example": 1200
+          },
+          "totalProducts": {
+            "type": "integer",
+            "example": 340
+          },
+          "totalOrders": {
+            "type": "integer",
+            "example": 4500
+          },
+          "totalRevenue": {
+            "type": "number",
+            "example": 1250000
+          },
+          "pendingOrders": {
+            "type": "integer",
+            "example": 87
+          },
+          "activeTickets": {
+            "type": "integer",
+            "example": 12
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Register"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "JWT token + user object"
+          },
+          "409": {
+            "description": "Email already registered"
+          },
+          "422": {
+            "description": "Validation error (missing fields, weak password)"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JWT token + user object"
+          },
+          "400": {
+            "description": "Invalid credentials"
+          },
+          "422": {
+            "description": "Validation error (missing email or password)"
+          }
+        }
+      }
+    },
+    "/api/auth/profile": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get logged-in user profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile object"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Update user profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user object"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/auth/avatar": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Upload user avatar",
+        "description": "Accepts multipart/form-data with field name `avatar` (single image, max 2 MB). Uploads to Cloudinary and updates the user's profile picture. Returns the new Cloudinary URL.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "avatar"
+                ],
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Image file (jpg, jpeg, png, webp \u2014 max 2 MB)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatar": {
+                          "type": "string",
+                          "example": "https://res.cloudinary.com/demo/image/upload/v1/smartcart/avatars/abc123.webp"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file provided or invalid file type"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request a password reset email",
+        "description": "Always returns 200 regardless of whether the email exists \u2014 prevents user enumeration. Check the inbox for a reset link (valid 10 min).\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset link sent (or silently ignored if email not found)"
+          }
+        }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Set a new password using the emailed token",
+        "description": "Token is the raw value from the reset link query string (?token=...). Valid for 10 minutes. Invalidates all existing sessions on success.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "password"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed + fresh JWT returned"
+          },
+          "400": {
+            "description": "Token invalid or expired"
+          }
+        }
+      }
+    },
+    "/api/auth/fcm-token": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register or clear a Firebase Cloud Messaging device token",
+        "description": "Call after login (or when the FCM token refreshes) to enable push notifications. Pass `fcmToken: null` to deregister (e.g. on logout or when user opts out).\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fcmToken": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Pass null to deregister"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token saved"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/behaviors": {
+      "post": {
+        "tags": [
+          "Behaviors"
+        ],
+        "summary": "Log a user action (view, wishlist, search, review)",
+        "description": "Call from the frontend when the user performs an action that cannot be inferred server-side (e.g. viewing a product page, adding to wishlist, submitting a search query).\n`purchase` and `add_to_cart` are auto-logged server-side \u2014 do NOT duplicate them here.\nExtra context fields: - `durationSeconds` \u2014 how long the product page was open (action: view) - `query` \u2014 the search string (action: search) - `rating` \u2014 star rating 1\u20135 (action: review)\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "description": "MongoDB ObjectId \u2014 omit for search logs"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "view",
+                      "add_to_cart",
+                      "remove_from_cart",
+                      "purchase",
+                      "wishlist",
+                      "review",
+                      "search"
+                    ]
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "search action only"
+                  },
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "durationSeconds": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "price": {
+                    "type": "number",
+                    "description": "purchase action only \u2014 price paid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged successfully"
+          },
+          "422": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/cart": {
+      "get": {
+        "tags": [
+          "Cart"
+        ],
+        "summary": "Get current user's cart",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cart object with items and total"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/cart/add": {
+      "post": {
+        "tags": [
+          "Cart"
+        ],
+        "summary": "Add item to cart",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartAdd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated cart"
+          },
+          "400": {
+            "description": "Product not found or validation error"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/cart/update": {
+      "put": {
+        "tags": [
+          "Cart"
+        ],
+        "summary": "Update item quantity (set to 0 to remove)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated cart"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/cart/remove/{productId}": {
+      "delete": {
+        "tags": [
+          "Cart"
+        ],
+        "summary": "Remove a specific item from cart",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated cart"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/cart/clear": {
+      "delete": {
+        "tags": [
+          "Cart"
+        ],
+        "summary": "Clear entire cart",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cart cleared"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "List all categories (with their subcategories)",
+        "responses": {
+          "200": {
+            "description": "Array of categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Create a category (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Electronics"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created"
+          },
+          "401": {
+            "description": "Not authorised"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/categories/{slug}": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Get a single category by slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "electronics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category object"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Update a category (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated category"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Delete a category (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/categories/{slug}/subcategories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Get all subcategories of a category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "electronics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of subcategories"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Add a subcategory to a category (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Smartphones"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subcategory added"
+          },
+          "404": {
+            "description": "Category not found"
+          },
+          "409": {
+            "description": "Subcategory already exists"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/categories/{slug}/subcategories/{subSlug}": {
+      "put": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Rename a subcategory (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subSlug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Feature Phones"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated category"
+          },
+          "404": {
+            "description": "Category or subcategory not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Remove a subcategory (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subSlug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategory removed"
+          },
+          "404": {
+            "description": "Category not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/oauth/google": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Initiate Google OAuth 2.0 login",
+        "description": "Redirects the browser to Google's consent screen.\nAfter the user grants permission Google redirects back to\n`/api/oauth/google/callback` where a JWT is issued and the\nbrowser is forwarded to the frontend with the token in the\nquery string: `{CLIENT_URL}/oauth/callback?token=<jwt>`\n",
+        "responses": {
+          "302": {
+            "description": "Redirect to Google"
+          }
+        }
+      }
+    },
+    "/api/oauth/google/callback": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Google OAuth 2.0 callback (handled internally)",
+        "description": "Google redirects here after the user approves/denies access.\nOn success the browser is redirected to:\n`{CLIENT_URL}/oauth/callback?token=<jwt>`\nOn failure it redirects to:\n`{CLIENT_URL}/login?error=oauth_failed`\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authorization code provided by Google (handled automatically)"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to frontend with JWT token"
+          }
+        }
+      }
+    },
+    "/api/oauth/me": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Get current OAuth / JWT authenticated user",
+        "description": "Works for both local JWT and OAuth JWT tokens.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated user object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "avatar": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "local",
+                            "google",
+                            "facebook"
+                          ]
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "subadmin",
+                            "admin"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/oauth/logout": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Logout \u2014 client-side token discard instruction",
+        "description": "JWT is stateless \u2014 this endpoint simply returns a success response\nas a hint for the frontend to delete its stored token.\nFor session-based OAuth flows the session is also destroyed.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout successful"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/oauth/facebook": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Initiate Facebook OAuth 2.0 login",
+        "description": "Redirects the browser to Facebook's login / consent dialog.\nAfter approval Facebook redirects back to `/api/oauth/facebook/callback`\nwhere a JWT is issued and the browser is forwarded to:\n`{CLIENT_URL}/oauth/callback?token=<jwt>`\n",
+        "responses": {
+          "302": {
+            "description": "Redirect to Facebook"
+          }
+        }
+      }
+    },
+    "/api/oauth/facebook/callback": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Facebook OAuth 2.0 callback (handled internally)",
+        "description": "Facebook redirects here after the user approves/denies access.\nOn success the browser is redirected to:\n`{CLIENT_URL}/oauth/callback?token=<jwt>`\nOn failure it redirects to:\n`{CLIENT_URL}/login?error=oauth_failed`\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authorization code provided by Facebook (handled automatically)"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to frontend with JWT token"
+          }
+        }
+      }
+    },
+    "/api/orders/checkout": {
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Place new order and create Stripe PaymentIntent",
+        "description": "Idempotent \u2014 send an `Idempotency-Key` header (UUID) to prevent duplicate orders on network retries or double-clicks. Same key returns the cached response.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional unique key (UUID). Repeated requests with the same key return the original response."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Checkout"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "Duplicate request in-flight (same Idempotency-Key)"
+          },
+          "422": {
+            "description": "Validation error (missing items, missing shippingAddress.city, etc.)"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "201": {
+            "description": "Order created \u2014 returns orderId + clientSecret (Stripe) or orderId only (COD)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "clientSecret": {
+                          "type": "string",
+                          "description": "Stripe PaymentIntent client secret (absent for COD)"
+                        },
+                        "paymentIntentId": {
+                          "type": "string",
+                          "description": "Stripe PaymentIntent ID (absent for COD)"
+                        },
+                        "amount": {
+                          "type": "number",
+                          "description": "Order total in smallest currency unit"
+                        },
+                        "paymentMethod": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "cod"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get current user's orders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of orders"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/orders/cod-pending": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Admin \u2014 list COD orders pending collection",
+        "description": "Returns all orders with `paymentMethod: cod` and `paymentStatus: cod_pending` (delivered but cash not yet collected). Accessible by admin and subadmin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of COD orders awaiting collection"
+          },
+          "403": {
+            "description": "Admin / subadmin only"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/orders/all": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Admin \u2014 list all orders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of all orders"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get single order by ID",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order object"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/cancel": {
+      "put": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Cancel an order",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled order"
+          },
+          "400": {
+            "description": "Cannot cancel at this stage"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/status": {
+      "put": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Admin \u2014 update order status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "processing",
+                      "shipped",
+                      "delivered",
+                      "cancelled",
+                      "cod_collected"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/payments/create-intent": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Create a Stripe PaymentIntent for an existing order",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "clientSecret and paymentIntentId returned"
+          },
+          "400": {
+            "description": "Order not found or already paid"
+          },
+          "409": {
+            "description": "Duplicate request in-flight (same Idempotency-Key)"
+          },
+          "422": {
+            "description": "Validation error (missing orderId)"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/payments/webhook": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Stripe webhook \u2014 receives raw body, verifies signature",
+        "description": "Do NOT send JSON \u2014 Stripe posts raw bytes. Signature verified via STRIPE_WEBHOOK_SECRET.",
+        "responses": {
+          "200": {
+            "description": "{ received: true }"
+          },
+          "400": {
+            "description": "Signature verification failed"
+          }
+        }
+      }
+    },
+    "/api/payments/{orderId}": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Get payment record for an order",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orderId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment record object"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List products (paginated, filterable, sortable)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search by product name"
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by category slug (case-insensitive)"
+          },
+          {
+            "in": "query",
+            "name": "subcategory",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by subcategory slug \u2014 use together with category"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "in": "query",
+            "name": "minPrice",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Filter products with price >= minPrice"
+          },
+          {
+            "in": "query",
+            "name": "maxPrice",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Filter products with price <= maxPrice"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "price_asc",
+                "price_desc",
+                "rating",
+                "newest"
+              ],
+              "default": "newest"
+            },
+            "description": "Sort order for results"
+          },
+          {
+            "in": "query",
+            "name": "brand",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by brand name (case-insensitive regex match)"
+          },
+          {
+            "in": "query",
+            "name": "inStock",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "If true, only return products with stock > 0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of products"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create product (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Product"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get product by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product object"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update product (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Product"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated product"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Delete product (Admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/products/{id}/images": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Upload product images (Admin)",
+        "description": "Accepts up to 6 image files via multipart/form-data (field name: `images`). Each file max 5 MB. Uploads to Cloudinary and appends URLs to the product's images array.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "images"
+                ],
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "maxItems": 6,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "Image files (jpg, jpeg, png, webp \u2014 max 5 MB each)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated product with new image URLs"
+          },
+          "400": {
+            "description": "Invalid file type or too many files"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Delete a product image (Admin)",
+        "description": "Removes a specific image URL from the product's images array and deletes the asset from Cloudinary.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "imageUrl"
+                ],
+                "properties": {
+                  "imageUrl": {
+                    "type": "string",
+                    "description": "The Cloudinary URL of the image to delete",
+                    "example": "https://res.cloudinary.com/demo/image/upload/v1/smartcart/products/abc123.webp"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image deleted, updated product returned"
+          },
+          "400": {
+            "description": "imageUrl not found on product"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      }
+    },
+    "/api/products/ai-search": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "AI semantic search (Gemini + Pinecone)",
+        "description": "Embeds the natural-language query via Gemini text-embedding-004, finds the most semantically similar products in Pinecone, then fetches full product documents from MongoDB. Falls back to MongoDB regex search if Pinecone is not configured.\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Natural language search query (e.g. \"waterproof running shoes for summer\")"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of matching products ranked by semantic relevance"
+          }
+        }
+      }
+    },
+    "/api/products/search": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Search products by name or description",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search term"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching products"
+          }
+        }
+      }
+    },
+    "/api/products/category/{name}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Filter products by category (optionally also subcategory)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Category slug (case-insensitive)"
+          },
+          {
+            "in": "query",
+            "name": "subcategory",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional subcategory slug to narrow results"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products in category"
+          }
+        }
+      }
+    },
+    "/api/recommendations": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get personalized product recommendations",
+        "description": "Uses the authenticated user's behavior history (views, purchases, cart actions) to build a taste profile, embed it via Gemini, and find the most semantically similar products in Pinecone. Cold start (< 5 actions): returns top-rated products.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of recommended products (personalized or top-rated)"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/reviews/{productId}": {
+      "post": {
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Add a review for a product",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Review created + product rating updated"
+          },
+          "409": {
+            "description": "User has already reviewed this product"
+          },
+          "422": {
+            "description": "Validation error (rating required, comment min 3 chars)"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Get all reviews for a product",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of reviews"
+          }
+        }
+      }
+    },
+    "/api/reviews/{id}": {
+      "delete": {
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Delete your own review",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "Not authorized or not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/admin/subadmins": {
+      "get": {
+        "tags": [
+          "SubAdmins"
+        ],
+        "summary": "List all sub-admins (Admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of sub-admin users with their assigned cities"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/admin/subadmins/{userId}/promote": {
+      "post": {
+        "tags": [
+          "SubAdmins"
+        ],
+        "summary": "Promote a user to sub-admin (Admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "city"
+                ],
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "example": "lahore"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User promoted to sub-admin"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "409": {
+            "description": "Already a sub-admin or is a main admin"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/admin/subadmins/{userId}/demote": {
+      "delete": {
+        "tags": [
+          "SubAdmins"
+        ],
+        "summary": "Demote a sub-admin back to user (Admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sub-admin demoted to user"
+          },
+          "409": {
+            "description": "Not a sub-admin or is a main admin"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/tickets": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Create a support ticket",
+        "description": "City is auto-detected from the linked order's shippingAddress.city, or from the user's profile address. A subadmin for that city is auto-assigned. If none exists, assignedTo is null (main admin handles it).\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "description": "Optional \u2014 links ticket to an order"
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ticket created"
+          },
+          "400": {
+            "description": "No city found / missing message"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "List tickets (role-scoped)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "in_progress",
+                "closed"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated ticket list"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}": {
+      "get": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Get a single ticket with full message history",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket object"
+          },
+          "403": {
+            "description": "Not authorized (wrong user / city mismatch)"
+          },
+          "404": {
+            "description": "Ticket not found"
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Delete a ticket (admin only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ticket MongoDB ObjectId"
+          }
+        ]
+      }
+    },
+    "/api/tickets/{id}/messages": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Send a message in a ticket",
+        "description": "Message is persisted in MongoDB AND emitted via Socket.io to all clients in room `ticket_{id}`. Transitions ticket from open \u2192 in_progress on first staff reply.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ticket MongoDB ObjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent"
+          },
+          "409": {
+            "description": "Ticket is closed"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}/close": {
+      "patch": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Close a ticket (subadmin for their city, or admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ticket MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket closed"
+          },
+          "403": {
+            "description": "Not authorized"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/admin/cart/trigger-abandoned-check": {
+      "post": {
+        "tags": [
+          "Admin Cart"
+        ],
+        "summary": "Manually trigger abandoned cart cron job (Admin only)",
+        "description": "Triggers the same abandoned cart detection job that runs automatically every hour. Finds all carts idle for 1+ hour with reminderSent=false, generates LLM-personalized FCM notifications based on real stock levels (CRITICAL/LOW/MEDIUM/HIGH), sends via Firebase, saves notification records to MongoDB, and marks reminderSent=true. Use this endpoint for testing without waiting 1 hour.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "cartsFound": {
+                          "type": "integer",
+                          "example": 4
+                        },
+                        "notificationsSent": {
+                          "type": "integer",
+                          "example": 3
+                        },
+                        "skippedNoToken": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "example": 0
+                        },
+                        "executionTimeMs": {
+                          "type": "integer",
+                          "example": 1240
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "500": {
+            "description": "Job threw an uncaught error"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get all notifications for the logged-in user (paginated)",
+        "description": "Returns notifications sorted by createdAt descending (newest first). Supports optional isRead filter and pagination. Also returns the total unreadCount for the user as a separate field.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "Items per page (max 50)"
+          },
+          {
+            "in": "query",
+            "name": "isRead",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Filter by read state \u2014 omit to return all notifications"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of notifications plus unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "notifications": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Notification"
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "integer",
+                              "example": 1
+                            },
+                            "limit": {
+                              "type": "integer",
+                              "example": 20
+                            },
+                            "total": {
+                              "type": "integer",
+                              "example": 45
+                            },
+                            "pages": {
+                              "type": "integer",
+                              "example": 3
+                            }
+                          }
+                        },
+                        "unreadCount": {
+                          "type": "integer",
+                          "example": 7
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all notifications as read",
+        "description": "Sets isRead=true and readAt=now on every unread notification for the logged-in user. NOTE: This path is registered BEFORE /notifications/{id} in Express to prevent the string 'read-all' being matched as a MongoDB ObjectId parameter.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All unread notifications marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "integer",
+                          "example": 5,
+                          "description": "Number of notifications updated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "patch": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark a single notification as read",
+        "description": "Sets isRead=true and readAt=now. Only the notification owner can mark it read \u2014 404 is returned if the notification belongs to a different user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Notification MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated notification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "notification": {
+                          "$ref": "#/components/schemas/Notification"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Notification not found or does not belong to this user"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}": {
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Delete a single notification",
+        "description": "Hard-deletes the notification. Only the notification owner can delete it \u2014 404 is returned if the notification belongs to a different user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Notification MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "nullable": true,
+                      "example": null
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Notification deleted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Notification not found or does not belong to this user"
+          }
+        }
+      }
+    },
+    "/api/wishlist": {
+      "get": {
+        "tags": [
+          "Wishlist"
+        ],
+        "summary": "Get the logged-in user's wishlist with full product details",
+        "description": "Returns the wishlist document with products array fully populated from the products collection. If no wishlist exists yet for the user, returns an empty wishlist shape { userId, products: [] } without creating a document.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wishlist with populated products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "wishlist": {
+                          "$ref": "#/components/schemas/Wishlist"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/wishlist/{productId}": {
+      "post": {
+        "tags": [
+          "Wishlist"
+        ],
+        "summary": "Add a product to wishlist",
+        "description": "Validates that productId is a valid MongoDB ObjectId and that the product exists. Creates the wishlist document if this is the user's first save (upsert). Returns 409 if the product is already in the wishlist.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MongoDB ObjectId of the product to add"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Updated wishlist with populated products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "wishlist": {
+                          "$ref": "#/components/schemas/Wishlist"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "409": {
+            "description": "Product is already in wishlist"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Wishlist"
+        ],
+        "summary": "Remove a product from wishlist",
+        "description": "Removes the productId from the wishlist's products array using $pull. Silently succeeds even if the product was not in the wishlist. Returns the updated wishlist with products fully populated.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MongoDB ObjectId of the product to remove"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated wishlist with populated products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "wishlist": {
+                          "$ref": "#/components/schemas/Wishlist"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Logout \u2014 clears FCM token and deregisters device",
+        "description": "Clears the user's fcmToken field in MongoDB so no further push notifications are sent to this device after logout. JWT is stateless \u2014 the client must also delete the token from localStorage or cookies. This endpoint handles local JWT auth logout only. For OAuth session logout use POST /api/oauth/logout.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logged out successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "nullable": true,
+                      "example": null
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Logged out successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin Users"
+        ],
+        "summary": "List all regular users (Admin only)",
+        "description": "Returns paginated users where role='user'. Subadmins and admins are excluded. Supports search by name or email (case-insensitive regex). Never returns passwordHash.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            },
+            "description": "Items per page"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search by name or email \u2014 case-insensitive partial match"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "_id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string"
+                              },
+                              "avatar": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isBlocked": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "provider": {
+                                "type": "string",
+                                "enum": [
+                                  "local",
+                                  "google",
+                                  "facebook"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "pages": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin Users"
+        ],
+        "summary": "Create a new user, sub-admin, or admin account (Admin only)",
+        "description": "Directly creates a new user account with specified details and role (user, subadmin, admin). Subadmins require a city parameter. Created users are marked isVerified=true by default.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "password",
+                  "role"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Jane Doe"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "jane@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "SecurePass123!"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "subadmin",
+                      "admin"
+                    ],
+                    "example": "subadmin"
+                  },
+                  "city": {
+                    "type": "string",
+                    "description": "Required only if role is subadmin",
+                    "example": "lahore"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                              "example": "664abc123def456"
+                            },
+                            "name": {
+                              "type": "string",
+                              "example": "Jane Doe"
+                            },
+                            "email": {
+                              "type": "string",
+                              "example": "jane@example.com"
+                            },
+                            "role": {
+                              "type": "string",
+                              "example": "subadmin"
+                            },
+                            "city": {
+                              "type": "string",
+                              "example": "lahore"
+                            },
+                            "isVerified": {
+                              "type": "boolean",
+                              "example": true
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or missing fields"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "409": {
+            "description": "Email already registered"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}": {
+      "get": {
+        "tags": [
+          "Admin Users"
+        ],
+        "summary": "Get a single user with activity stats (Admin only)",
+        "description": "Returns the full user document (excluding passwordHash) plus computed stats: orderCount, behaviorCount, and totalSpent. Stats are fetched in parallel via Promise.all.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User with stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "_id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "role": {
+                              "type": "string"
+                            },
+                            "isBlocked": {
+                              "type": "boolean"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "orderCount": {
+                              "type": "integer",
+                              "example": 12
+                            },
+                            "behaviorCount": {
+                              "type": "integer",
+                              "example": 87
+                            },
+                            "totalSpent": {
+                              "type": "number",
+                              "example": 45000
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin Users"
+        ],
+        "summary": "Permanently delete a user and all their data (Admin only)",
+        "description": "Hard-deletes the user document and cascades to all related collections: orders, behaviors, cart, wishlist, reviews, notifications, tickets. Cannot delete another admin account (returns 403). This action is irreversible.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User and all related data deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "nullable": true,
+                      "example": null
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "User and all related data deleted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only \u2014 cannot delete another admin account"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}/block": {
+      "patch": {
+        "tags": [
+          "Admin Users"
+        ],
+        "summary": "Toggle block/unblock a user (Admin only)",
+        "description": "Toggles the isBlocked flag. If currently blocked \u2192 unblocks; if unblocked \u2192 blocks. Cannot block another admin account (returns 403). Blocked users receive 403 on login attempts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User blocked or unblocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "enum": [
+                        "User blocked",
+                        "User unblocked"
+                      ],
+                      "example": "User blocked"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only \u2014 cannot block another admin account"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "tags": [
+          "Admin Stats"
+        ],
+        "summary": "Get overall platform dashboard statistics (Admin only)",
+        "description": "Returns six key platform metrics in a single request. All six MongoDB queries run in parallel via Promise.all for performance. totalRevenue counts only orders where paymentStatus is 'paid' or 'cod_collected'.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AdminStats"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/admin/stats/orders": {
+      "get": {
+        "tags": [
+          "Admin Stats"
+        ],
+        "summary": "Order counts by status and by day (Admin + Subadmin)",
+        "description": "Admin sees all orders. Subadmin automatically scoped to orders where shippingAddress.city matches their assigned city \u2014 no extra parameter needed. byDay array is sorted ascending by date.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "7d",
+                "30d",
+                "90d"
+              ],
+              "default": "30d"
+            },
+            "description": "Time window \u2014 7d, 30d (default), or 90d"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order stats by status and by day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "period": {
+                          "type": "string",
+                          "example": "30d"
+                        },
+                        "byStatus": {
+                          "type": "object",
+                          "description": "Count of orders per status within the period",
+                          "properties": {
+                            "pending": {
+                              "type": "integer",
+                              "example": 10
+                            },
+                            "processing": {
+                              "type": "integer",
+                              "example": 8
+                            },
+                            "shipped": {
+                              "type": "integer",
+                              "example": 15
+                            },
+                            "delivered": {
+                              "type": "integer",
+                              "example": 30
+                            },
+                            "cancelled": {
+                              "type": "integer",
+                              "example": 4
+                            },
+                            "cod_collected": {
+                              "type": "integer",
+                              "example": 12
+                            }
+                          }
+                        },
+                        "byDay": {
+                          "type": "array",
+                          "description": "Order count per calendar day, sorted ascending",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string",
+                                "example": "2026-05-01"
+                              },
+                              "count": {
+                                "type": "integer",
+                                "example": 7
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin or Subadmin only"
+          }
+        }
+      }
+    },
+    "/api/admin/stats/revenue": {
+      "get": {
+        "tags": [
+          "Admin Stats"
+        ],
+        "summary": "Revenue totals and trends (Admin only)",
+        "description": "Only counts orders where paymentStatus is 'paid' or 'cod_collected'. byCategory uses a MongoDB $lookup aggregation to join with the products collection, unwinds order items, and groups by product.category. byDay is sorted ascending. byCategory is sorted by revenue descending.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "7d",
+                "30d",
+                "90d"
+              ],
+              "default": "30d"
+            },
+            "description": "Time window \u2014 7d, 30d (default), or 90d"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "period": {
+                          "type": "string",
+                          "example": "30d"
+                        },
+                        "total": {
+                          "type": "number",
+                          "example": 1250000,
+                          "description": "Total revenue in the period"
+                        },
+                        "byDay": {
+                          "type": "array",
+                          "description": "Revenue summed per calendar day, sorted ascending",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string",
+                                "example": "2026-05-01"
+                              },
+                              "revenue": {
+                                "type": "number",
+                                "example": 45000
+                              }
+                            }
+                          }
+                        },
+                        "byCategory": {
+                          "type": "array",
+                          "description": "Revenue per product category, sorted descending",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "category": {
+                                "type": "string",
+                                "example": "electronics"
+                              },
+                              "revenue": {
+                                "type": "number",
+                                "example": 320000
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/products/{id}/sync-vector": {
+      "post": {
+        "tags": [
+          "Vector Sync"
+        ],
+        "summary": "Re-embed a single product into Pinecone (Admin only)",
+        "description": "Builds an embedding text from product name + description + category + subcategory + tags, sends it to the Gemini embedding API (gemini-embedding-001), and upserts the resulting 1536-dimension vector into Pinecone with metadata (name, category, price, isActive). Sets products.vectorSynced=true in MongoDB on success. Use after editing a product's name or description to keep search results accurate. IMPORTANT: This route is registered BEFORE GET/PUT/DELETE /:id in Express.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Product MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vector synced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "vectorId": {
+                          "type": "string",
+                          "example": "664abc123def456789012345"
+                        },
+                        "synced": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "503": {
+            "description": "Gemini or Pinecone is not configured"
+          }
+        }
+      }
+    },
+    "/api/products/sync-all-vectors": {
+      "post": {
+        "tags": [
+          "Vector Sync"
+        ],
+        "summary": "Re-embed all unsynced products in background (Admin only)",
+        "description": "Finds all products where vectorSynced=false and starts a non-blocking background job using setImmediate. Returns immediately with a jobId and totalQueued count. Processing includes a 200ms delay between products to avoid Gemini rate limits. Progress is logged to the server console every 10 products. IMPORTANT: This route is registered BEFORE /:id routes in Express to avoid the string 'sync-all-vectors' being matched as a MongoDB ObjectId.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Background sync started \u2014 returns immediately",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "jobId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                        },
+                        "totalQueued": {
+                          "type": "integer",
+                          "example": 42
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Sync started in background"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/cod-collect": {
+      "patch": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Mark COD order cash as collected (Subadmin city-scoped or Admin)",
+        "description": "Only valid when order.paymentMethod='cod' AND order.status='delivered'. Atomically updates both order.status and order.paymentStatus to 'cod_collected'. Subadmin can only collect for orders where shippingAddress.city matches their assigned city. Sends a Firebase push notification to the customer on success. Uses a TOCTOU-safe findOneAndUpdate to prevent race conditions.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Order MongoDB ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order marked as cod_collected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "description": "Full updated order document"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Order is not a COD order, or status is not 'delivered' yet"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Subadmin city does not match order's shipping city"
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "409": {
+            "description": "Cash payment already collected for this order"
+          }
+        }
+      }
+    },
+    "/api/tickets/{id}/reassign": {
+      "patch": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Reassign a ticket to a different subadmin (Admin only)",
+        "description": "Reassigns an open or in_progress ticket to a different subadmin. Validates that the target subadmin's city matches the ticket's city. Cannot reassign a closed ticket. Sends a Firebase push notification to the newly assigned subadmin if they have an FCM token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ticket MongoDB ObjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "subadminId"
+                ],
+                "properties": {
+                  "subadminId": {
+                    "type": "string",
+                    "description": "MongoDB ObjectId of the subadmin to assign",
+                    "example": "664abc123def456789012345"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket reassigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ticket": {
+                          "type": "object",
+                          "description": "Updated ticket document"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ticket is closed and cannot be reassigned, or subadmin city does not match ticket city"
+          },
+          "401": {
+            "description": "Not authorized"
+          },
+          "403": {
+            "description": "Admin only"
+          },
+          "404": {
+            "description": "Ticket not found, or target subadmin not found / not a subadmin"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "User registration, login and profile"
+    },
+    {
+      "name": "Behaviors",
+      "description": "User behavior logging for the AI recommendation engine"
+    },
+    {
+      "name": "Cart",
+      "description": "Shopping cart management"
+    },
+    {
+      "name": "Categories",
+      "description": "Category and subcategory management"
+    },
+    {
+      "name": "OAuth",
+      "description": "Google and Facebook OAuth 2.0 \u2014 social login"
+    },
+    {
+      "name": "Orders",
+      "description": "Place, view, cancel and manage orders"
+    },
+    {
+      "name": "Payments",
+      "description": "Stripe PaymentIntent creation, webhook and payment status"
+    },
+    {
+      "name": "Products",
+      "description": "Product catalogue \u2014 CRUD, search and category filter"
+    },
+    {
+      "name": "Recommendations",
+      "description": "AI-powered personalized product recommendations"
+    },
+    {
+      "name": "Reviews",
+      "description": "Product reviews and ratings"
+    },
+    {
+      "name": "SubAdmins",
+      "description": "Manage sub-admins \u2014 promote, demote, list (Main Admin only)"
+    },
+    {
+      "name": "Tickets",
+      "description": "Support ticket system with real-time Socket.io chat"
+    },
+    {
+      "name": "Notifications",
+      "description": "User notification management \u2014 read, delete, mark read"
+    },
+    {
+      "name": "Wishlist",
+      "description": "User wishlist \u2014 add, remove, view saved products"
+    },
+    {
+      "name": "Admin Users",
+      "description": "Admin user management \u2014 list, block, delete users"
+    },
+    {
+      "name": "Admin Stats",
+      "description": "Dashboard statistics \u2014 orders, revenue, overview"
+    },
+    {
+      "name": "Admin Cart",
+      "description": "Abandoned cart job trigger for testing"
+    },
+    {
+      "name": "Vector Sync",
+      "description": "Pinecone vector sync for product embeddings"
+    }
+  ]
+}

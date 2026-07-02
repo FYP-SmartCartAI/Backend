@@ -119,11 +119,19 @@ export const sendMessage = async (ticketId, sender, text) => {
   }
   await ticket.save()
 
+  const saved = ticket.messages[ticket.messages.length - 1]
+
   // Emit to all sockets in the ticket room — real-time delivery
   try {
-    getIO().to(`ticket_${ticketId}`).emit('new_message', {
-      ticketId,
-      message: { ...newMessage, sender: { id: sender.id, name: sender.name, role: sender.role } },
+    getIO().to(`ticket_${String(ticketId)}`).emit('new_message', {
+      ticketId: String(ticketId),
+      message: {
+        _id:        saved._id,
+        sender:     { _id: sender.id, name: sender.name, role: sender.role },
+        senderRole: sender.role,
+        text:       saved.text,
+        createdAt:  saved.createdAt,
+      },
     })
   } catch {
     // getIO() throws if socket.io not initialized (e.g. in tests) — non-fatal

@@ -28,8 +28,15 @@ export const sendPush = async (token, title, body, data = {}) => {
       token,
       notification: { title, body },
       data: Object.fromEntries(
-        Object.entries(data).map(([k, v]) => [k, String(v)])
+        Object.entries({ ...data, title, body }).map(([k, v]) => [k, String(v)])
       ),
+      webpush: {
+        headers: { Urgency: 'high' },
+        notification: { title, body },
+        fcmOptions: {
+          link: process.env.CLIENT_URL || 'http://localhost:5173',
+        },
+      },
       android: {
         priority: 'high',
         notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' },

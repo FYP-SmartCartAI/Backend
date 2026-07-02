@@ -309,7 +309,7 @@ export const aiSearch = async (queryText, topK = 10, { maxPrice: paramMax, minPr
     logMongoFetch({
       idsRequested: ids,
       mongoFilter: stockFilter,
-      productsFound: beforeStrict.length,
+      productsFound: beforeStrict,
     })
 
     const afterCategory = intent?.categories?.length

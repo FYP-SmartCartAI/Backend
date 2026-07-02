@@ -9,6 +9,12 @@ import { logAction } from './behaviorService.js'
 
 const err = (msg, code) => Object.assign(new Error(msg), { statusCode: code })
 
+/** Returns the active selling price — discountPrice takes priority over price */
+const effectivePrice = (product) =>
+  (product.discountPrice != null && product.discountPrice < product.price)
+    ? product.discountPrice
+    : product.price
+
 // ── Role-scoped status transition rules ───────────────────────────────────────
 // admin & subadmin can transition to any forward status, but never backwards
 const ADMIN_TRANSITIONS = {
@@ -21,11 +27,13 @@ const ADMIN_TRANSITIONS = {
   cod_collected: [],
 }
 const SUBADMIN_TRANSITIONS = {
-  pending:       ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
-  confirmed:     ['processing', 'shipped', 'delivered', 'cancelled'],
-  processing:    ['shipped',    'delivered', 'cancelled'],
-  shipped:       ['delivered',  'cancelled'],
-  delivered:     ['cod_collected'],  // mark COD cash received in their city
+  // Subadmin only acts AFTER admin ships the order.
+  // pending / confirmed / processing / cancelling are admin-only.
+  pending:       [],   // locked — admin must confirm & ship first
+  confirmed:     [],   // locked — admin must process & ship first
+  processing:    [],   // locked — admin must ship first
+  shipped:       ['delivered'],           // subadmin confirms delivery in their city
+  delivered:     ['cod_collected'],       // subadmin marks COD cash received
   cancelled:     [],
   cod_collected: [],
 }
@@ -57,13 +65,15 @@ export const placeOrder = async (userId, items, shippingAddress, paymentMethod =
     }
 
     const sanitizedItems = items.map(item => {
-      const p = productMap[item.product.toString()]
+      const p     = productMap[item.product.toString()]
+      const price = effectivePrice(p)
       return {
-        product: item.product,
-        name:    p.name,
-        qty:     item.quantity,
-        price:   p.price,
-        image:   p.images?.[0] || '',
+        product:       item.product,
+        name:          p.name,
+        qty:           item.quantity,
+        price,                            // the price actually charged
+        originalPrice: p.price,           // kept for receipt / history
+        image:         p.images?.[0] || '',
       }
     })
 

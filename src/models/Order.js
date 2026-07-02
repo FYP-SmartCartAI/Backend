@@ -4,11 +4,12 @@ import mongoose from 'mongoose'
 // Prices and product details are snapshotted at order time so the order history
 // stays accurate even if the product is later edited or deleted.
 const orderItemSchema = new mongoose.Schema({
-  product:  { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-  name:     { type: String, required: true },   // snapshot of product.name
-  qty:      { type: Number, required: true, min: 1 },
-  price:    { type: Number, required: true },   // locked from DB at order time
-  image:    { type: String, default: '' },       // snapshot of product.images[0]
+  product:       { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  name:          { type: String, required: true },   // snapshot of product.name
+  qty:           { type: Number, required: true, min: 1 },
+  price:         { type: Number, required: true },   // effective price charged (discounted if applicable)
+  originalPrice: { type: Number, default: null },    // pre-discount price — for receipt display
+  image:         { type: String, default: '' },       // snapshot of product.images[0]
 }, { _id: false })
 
 // ── Embedded shipping address ─────────────────────────────────────────────────

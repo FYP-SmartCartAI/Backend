@@ -1,6 +1,10 @@
 import Notification from '../models/Notification.js'
 import User from '../models/User.js'
 import { sendToUser } from '../utils/notificationService.js'
+import {
+  isUserViewingTicket,
+  resolveTicketIdFromNotifyPayload,
+} from '../utils/socketPresence.js'
 import { STATUS, ERRORS } from '../constants/httpConstants.js'
 
 const err = (msg, code) => Object.assign(new Error(msg), { statusCode: code })
@@ -78,16 +82,21 @@ export const createAndNotify = async ({
     })
 
     if (channel === 'firebase' || channel === 'both') {
-      sendToUser(recipientId, {
-        title,
-        body,
-        data: {
-          ...data,
-          type,
-          notificationId: notification._id.toString(),
-          ...(refId && { refId: refId.toString() }),
-        },
-      }).catch(() => {})
+      const ticketId = resolveTicketIdFromNotifyPayload({ type, refId, refModel, data })
+      const skipPush = ticketId && await isUserViewingTicket(recipientId, ticketId)
+
+      if (!skipPush) {
+        sendToUser(recipientId, {
+          title,
+          body,
+          data: {
+            ...data,
+            type,
+            notificationId: notification._id.toString(),
+            ...(refId && { refId: refId.toString() }),
+          },
+        }).catch(() => {})
+      }
     }
 
     return notification

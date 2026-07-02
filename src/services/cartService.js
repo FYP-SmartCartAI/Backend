@@ -5,6 +5,12 @@ import { logAction } from './behaviorService.js'
 
 const err = (msg, code) => Object.assign(new Error(msg), { statusCode: code })
 
+/** Returns the active selling price — discountPrice takes priority over price */
+const effectivePrice = (product) =>
+  (product.discountPrice != null && product.discountPrice < product.price)
+    ? product.discountPrice
+    : product.price
+
 /** Cart with no items is not actively abandoned — reset flags for accurate admin stats */
 const syncAbandonmentWhenEmpty = (cart) => {
   if (!cart.items?.length) {
@@ -17,7 +23,23 @@ const syncAbandonmentWhenEmpty = (cart) => {
 export const getCartForUser = async (userId) => {
   let cart = await Cart.findOne({ user: userId }).populate('items.product')
   if (!cart) cart = await Cart.create({ user: userId, items: [] })
-  return cart
+
+  // Compute discount-aware totals for the response
+  // subtotal = sum at original prices; total = sum at effective (discounted) prices
+  const subtotal = cart.items.reduce((s, it) => {
+    const origPrice = it.product?.price || it.price
+    return s + origPrice * it.quantity
+  }, 0)
+  const total = cart.items.reduce((s, it) => s + it.price * it.quantity, 0)
+  const discount = subtotal - total
+
+  // Attach as virtual fields (not persisted) so frontend can display savings
+  const cartObj = cart.toObject()
+  cartObj.subtotal = subtotal
+  cartObj.total    = total
+  cartObj.discount = discount > 0 ? discount : 0
+
+  return cartObj
 }
 
 export const addItem = async (userId, { productId, quantity = 1 }) => {
@@ -35,9 +57,9 @@ export const addItem = async (userId, { productId, quantity = 1 }) => {
     if (p.stock !== undefined && p.stock < newQty)
       throw err(ERRORS.OUT_OF_STOCK(p.name, p.stock), STATUS.CONFLICT)
     cart.items[idx].quantity = newQty
-    cart.items[idx].price    = p.price
+    cart.items[idx].price    = effectivePrice(p)
   } else {
-    cart.items.push({ product: p._id, quantity, price: p.price })
+    cart.items.push({ product: p._id, quantity, price: effectivePrice(p) })
   }
   cart.total = cart.items.reduce((s, it) => s + it.price * it.quantity, 0)
   await cart.save()

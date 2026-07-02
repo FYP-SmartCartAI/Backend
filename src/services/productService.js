@@ -358,6 +358,10 @@ export const getById = async (idOrSlug) => {
 export const findProductByIdOrSlug = findProduct
 
 export const create = async (data) => {
+  // Validate: discountPrice must be less than price
+  if (data.discountPrice != null && data.discountPrice >= data.price) {
+    throw err('Discount price must be less than the actual price', STATUS.BAD_REQUEST)
+  }
   normalizeProductFields(data)
   if (data.category) {
     data.category = await resolveCategorySlug(data.category)
@@ -376,6 +380,13 @@ export const create = async (data) => {
 export const update = async (idOrSlug, data) => {
   const existing = await findProduct(idOrSlug)
   if (!existing) throw err(ERRORS.PRODUCT_NOT_FOUND, STATUS.NOT_FOUND)
+
+  // Validate: discountPrice must be less than the effective price (updated or existing)
+  const effectivePrice = data.price ?? existing.price
+  if (data.discountPrice != null && data.discountPrice >= effectivePrice) {
+    throw err('Discount price must be less than the actual price', STATUS.BAD_REQUEST)
+  }
+
   normalizeProductFields(data)
   if (data.category) {
     data.category = await resolveCategorySlug(data.category)

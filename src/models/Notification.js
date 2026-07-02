@@ -88,8 +88,6 @@ notificationSchema.post('save', async function (doc) {
       isRead: false,
     })
     io.to(`user_${doc.recipientId.toString()}`).emit('unread_count_update', { count: unreadCount })
-
-    console.info(`[Socket] Dispatched real-time notification to user_${doc.recipientId}: "${doc.title}"`)
   } catch (err) {
     // Avoid crashing if Socket.io is not initialized (e.g. during script runs)
     console.error('[Notification Schema post-save] Socket emission failed:', err.message)

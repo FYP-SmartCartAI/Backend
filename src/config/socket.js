@@ -37,6 +37,7 @@ export const initSocket = (httpServer) => {
         role: user.role,
         city: user.city,
       }
+      socket.data.userId = socket.user.id
       next()
     } catch {
       next(new Error('Invalid or expired token'))
@@ -55,9 +56,10 @@ export const initSocket = (httpServer) => {
     // Authorization: user must own the ticket, subadmin must match city,
     // admin can join any ticket.
     socket.on('join_ticket', async ({ ticketId }) => {
-      if (!ticketId || typeof ticketId !== 'string') return
+      const tid = ticketId ? String(ticketId) : ''
+      if (!tid) return
       try {
-        const ticket = await Ticket.findById(ticketId).select('userId city assignedTo')
+        const ticket = await Ticket.findById(tid).select('userId city assignedTo')
         if (!ticket) return
 
         const { id: uid, role, city } = socket.user
@@ -67,7 +69,7 @@ export const initSocket = (httpServer) => {
           (role === 'user'     && ticket.userId.toString() === uid)
 
         if (!allowed) return
-        socket.join(`ticket_${ticketId}`)
+        socket.join(`ticket_${tid}`)
       } catch {
         // DB error — ignore; don't crash the socket
       }
@@ -75,8 +77,9 @@ export const initSocket = (httpServer) => {
 
     // ── leave-ticket-room ─────────────────────────────────────────────────
     socket.on('leave_ticket', ({ ticketId }) => {
-      if (!ticketId) return
-      socket.leave(`ticket_${ticketId}`)
+      const tid = ticketId ? String(ticketId) : ''
+      if (!tid) return
+      socket.leave(`ticket_${tid}`)
     })
 
     // ── send-message ──────────────────────────────────────────────────────

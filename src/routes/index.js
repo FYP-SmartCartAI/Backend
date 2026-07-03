@@ -15,6 +15,7 @@ import notificationRoutes   from './notificationRoutes.js'
 import wishlistRoutes       from './wishlistRoutes.js'
 import ticketRoutes         from './ticketRoutes.js'
 import adminRoutes          from './adminRoutes.js'  // ← consolidated admin router
+import flashSaleRoutes      from './flashSaleRoutes.js'
 
 router.use('/auth',            authRoutes)
 router.use('/oauth',           oauthRoutes)
@@ -31,5 +32,6 @@ router.use('/notifications',   notificationRoutes)
 router.use('/wishlist',        wishlistRoutes)
 router.use('/tickets',         ticketRoutes)
 router.use('/admin',           adminRoutes)          // ← single mount for all /api/admin/* routes
+router.use('/flash-sale',      flashSaleRoutes)
 
 export default router

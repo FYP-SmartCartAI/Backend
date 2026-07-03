@@ -37,6 +37,7 @@ const productSchema = new mongoose.Schema({
   // ── Vector sync status ────────────────────────────────────────────────────
   // true after product is embedded and upserted into Pinecone.
   vectorSynced: { type: Boolean, default: false },
+  iconName:     { type: String, default: 'Package' },
 }, { timestamps: true })
 
 // ── Pre-Save Hook ─────────────────────────────────────────────────────────────

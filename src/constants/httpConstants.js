@@ -124,6 +124,12 @@ export const ERRORS = {
   CATEGORY_DELETED: 'Category deleted',
   SUBCATEGORY_DELETED: 'Subcategory deleted',
 
+  // Flash Sale
+  FLASH_SALE_ALREADY_ACTIVE: 'A flash sale is already active. Terminate it before creating a new one.',
+  FLASH_SALE_NOT_FOUND:      'Flash sale not found',
+  FLASH_SALE_NOT_ACTIVE:     'This flash sale is not currently active',
+  FLASH_SALE_STILL_ACTIVE:   'Cannot delete an active flash sale. Terminate it first.',
+
   // General
   INTERNAL: 'Internal server error',
   TOO_MANY_REQUESTS: 'Too many requests, please try again later.',

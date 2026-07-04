@@ -3,6 +3,7 @@ import Order from '../models/Order.js'
 import User from '../models/User.js'
 import Product from '../models/Product.js'
 import Notification from '../models/Notification.js'
+import FlashSale from '../models/FlashSale.js'
 import { messaging } from '../config/firebase.js'
 import { groqChatCompletion, isGroqConfigured } from '../config/groq.js'
 import { ABANDONED_CART_IDLE_MINUTES } from '../config/env.js'
@@ -37,8 +38,9 @@ export const getFallbackMessage = (stockLevel, userName, productName, stockCount
 
 // ── Groq LLM call to generate personalised push notification text ─────────────
 // Returns { body, source: 'groq' | 'fallback' }
-export const generateAbandonedCartMessage = async (userName, products) => {
+export const generateAbandonedCartMessage = async (userName, products, flashSaleInfo = null) => {
   const firstName = userName?.split(' ')[0] || userName
+  const isFlashSaleActive = !!flashSaleInfo
 
   // Build the product lines for the prompt
   const productLines = products.map(p => {
@@ -59,6 +61,13 @@ export const generateAbandonedCartMessage = async (userName, products) => {
     'Abandoned products:',
     productLines,
     '',
+    isFlashSaleActive ? [
+      'SPECIAL INSTRUCTION — ACTIVE FLASH SALE:',
+      `The product "${flashSaleInfo.productName}" in their cart is currently on an active Flash Sale named "${flashSaleInfo.campaignTitle}"!`,
+      `There are exactly ${flashSaleInfo.minutesLeft} minutes left in this Flash Sale.`,
+      `You MUST create extreme urgency mentioning the exact time left (e.g. "${Math.floor(flashSaleInfo.minutesLeft / 60)} hours and ${flashSaleInfo.minutesLeft % 60} minutes left" or "${flashSaleInfo.minutesLeft} minutes left"), specify the flash sale name "${flashSaleInfo.campaignTitle}", and encourage them to checkout before the price goes back up.`,
+    ].join('\n') : '',
+    '',
     'Rules:',
     '- CRITICAL (1-3 stock): mention exact count, create urgency, fear of missing out',
     '- LOW (4-10 stock): say selling fast, do not mention exact number',
@@ -70,9 +79,15 @@ export const generateAbandonedCartMessage = async (userName, products) => {
     '- End with one relevant emoji only',
     '',
     'Output ONLY the notification text. No explanation. No quotes.',
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 
   const fallbackFor = () => {
+    if (isFlashSaleActive) {
+      const hours = Math.floor(flashSaleInfo.minutesLeft / 60)
+      const mins = flashSaleInfo.minutesLeft % 60
+      const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+      return `Hurry ${firstName}! Only ${timeStr} left to grab the "${flashSaleInfo.campaignTitle}" deal on the ${flashSaleInfo.productName} in your cart! 🔥`
+    }
     const worstProduct = products.reduce((prev, curr) => (curr.stock < prev.stock ? curr : prev), products[0])
     const level        = getStockLevel(worstProduct.stock)
     return getFallbackMessage(level, firstName, worstProduct.name, worstProduct.stock)
@@ -130,6 +145,12 @@ export const runAbandonedCartJob = async ({ force = false } = {}) => {
   let skippedNoToken   = 0
   let failed           = 0
   const sentMessages   = []
+
+  // Fetch active flash sale once per job run
+  const activeSale = await FlashSale.findOne({
+    isActive: true,
+    endTime: { $gt: new Date() }
+  })
 
   const recordMessage = (user, cart, products, title, { body, source }, channel) => {
     sentMessages.push({
@@ -218,20 +239,47 @@ export const runAbandonedCartJob = async ({ force = false } = {}) => {
         continue
       }
 
+      // Step 2d — Check if any cart item is currently on active Flash Sale
+      let flashSaleItem = null
+      let minutesLeft = null
+
+      if (activeSale && activeSale.products?.length > 0) {
+        const saleProductIds = activeSale.products.map((id) => id.toString())
+        const matchingItem = cart.items.find((item) => saleProductIds.includes(item.product.toString()))
+        if (matchingItem) {
+          flashSaleItem = await Product.findById(matchingItem.product).select('name')
+          if (flashSaleItem) {
+            const msLeft = new Date(activeSale.endTime) - new Date()
+            minutesLeft = Math.max(1, Math.round(msLeft / 60000))
+          }
+        }
+      }
+
+      // Setup custom or default message titles/bodies
+      let notificationTitle = 'Your cart misses you! 🛒'
+      const flashInfo = flashSaleItem && minutesLeft !== null
+        ? { productName: flashSaleItem.name, minutesLeft, campaignTitle: activeSale.title }
+        : null
+
+      if (flashInfo) {
+        notificationTitle = 'Flash Sale Alert! ⚡'
+      }
+
+      const generated = await generateAbandonedCartMessage(user.name, products, flashInfo)
+      const notificationBody = generated.body
+
       // If no FCM token: push skipped — in force mode still save in-app notification
       if (!user.fcmToken) {
         console.warn(`[abandonedCartService] No FCM token for user ${user._id} (cart ${cart._id})`)
         skippedNoToken++
 
         if (force) {
-          const notificationTitle = 'Your cart misses you! 🛒'
-          const generated = await generateAbandonedCartMessage(user.name, products)
           try {
             await Notification.create({
               recipientId: user._id,
               type:        'abandoned_cart',
               title:       notificationTitle,
-              body:        generated.body,
+              body:        notificationBody,
               refId:       cart._id,
               refModel:    'Cart',
               isRead:      false,
@@ -250,11 +298,6 @@ export const runAbandonedCartJob = async ({ force = false } = {}) => {
         await Cart.updateOne({ _id: cart._id }, { $set: { reminderSent: true, reminderSentAt: new Date() } })
         continue
       }
-
-      // Step 2e-f — Generate personalised message via Groq
-      const notificationTitle = 'Your cart misses you! 🛒'
-      const generated = await generateAbandonedCartMessage(user.name, products)
-      const notificationBody = generated.body
 
       // Step 2g — Send Firebase Cloud Messaging notification
       let firebaseSuccess = false

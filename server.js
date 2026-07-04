@@ -28,7 +28,6 @@ import { STATUS, ERRORS } from './src/constants/httpConstants.js'
 // ── Abandoned cart cron job (self-scheduling, runs every hour) ────────────────
 import './src/jobs/abandonedCartJob.js'
 import './src/jobs/unresolvedTicketJob.js'
-import './src/jobs/flashSaleJob.js'
 
 const app        = express()
 const httpServer = createServer(app)   // raw HTTP server — needed for Socket.io

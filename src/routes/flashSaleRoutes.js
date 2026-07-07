@@ -21,7 +21,7 @@ import * as flashSaleController from '../controllers/flashSaleController.js'
  *     summary: Get the current active flash sale (public)
  *     responses:
  *       200:
- *         description: Active flash sale with populated products, or { active: false }
+ *         description: "Active flash sale with populated products, or { active: false }"
  */
 router.get('/active', flashSaleController.getActiveFlashSale)
 

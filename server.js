@@ -167,8 +167,12 @@ app.use((req, res) => {
 app.use(errorMiddleware)
 
 // ── Start server ──────────────────────────────────────────────────────────────
-// Only when run directly (not imported by tests)
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Only when run directly or via PM2 (not imported by tests)
+const isDirectRun = process.argv[1] === fileURLToPath(import.meta.url) || 
+                    (process.argv[1] && process.argv[1].endsWith('server.js')) || 
+                    process.env.PM2_HOME !== undefined;
+
+if (isDirectRun) {
   const port = PORT || 5000
 
   // ── Await DB connection before accepting traffic ───────────────────────────

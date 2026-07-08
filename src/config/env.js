@@ -14,6 +14,9 @@ export const FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID
 export const FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET
 export const SESSION_SECRET       = process.env.SESSION_SECRET || 'smartcart_session_secret'
 export const CLIENT_URL           = process.env.CLIENT_URL || 'http://localhost:3000'
+export const BACKEND_URL          = process.env.BACKEND_URL || (NODE_ENV === 'production' ? 'https://smartcartai.duckdns.org' : `http://localhost:${PORT}`)
+export const GOOGLE_CALLBACK_URL  = process.env.GOOGLE_CALLBACK_URL || `${BACKEND_URL}/auth/google/callback`
+export const FACEBOOK_CALLBACK_URL = process.env.FACEBOOK_CALLBACK_URL || `${BACKEND_URL}/auth/facebook/callback`
 
 // ── Cloudinary ────────────────────────────────────────────────────────────────
 export const CLOUDINARY_CLOUD_NAME  = process.env.CLOUDINARY_CLOUD_NAME

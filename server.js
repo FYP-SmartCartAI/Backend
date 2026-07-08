@@ -15,8 +15,9 @@ import { fileURLToPath } from 'url'
 import rateLimit from 'express-rate-limit'
 import mongoSanitize from './src/middlewares/mongoSanitizeMiddleware.js'
 import mongoose from 'mongoose'
+import MongoStore from 'connect-mongo'
 
-import { PORT, NODE_ENV, SESSION_SECRET, CLIENT_URL } from './src/config/env.js'
+import { PORT, NODE_ENV, SESSION_SECRET, CLIENT_URL, MONGO_URI } from './src/config/env.js'
 import connectDB from './src/config/db.js'
 import routes from './src/routes/index.js'
 import oauthRoutes from './src/routes/oauthRoutes.js'
@@ -31,6 +32,9 @@ import './src/jobs/unresolvedTicketJob.js'
 
 const app        = express()
 const httpServer = createServer(app)   // raw HTTP server — needed for Socket.io
+
+// Trust proxy headers (needed behind Nginx / AWS ELB load balancers for rate limiters)
+app.set('trust proxy', 1)
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 // helmet sets 14 HTTP response headers: X-Frame-Options, X-Content-Type-Options,
@@ -127,6 +131,11 @@ app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: MONGO_URI,
+    collectionName: 'sessions',
+    ttl: 10 * 60 // 10 minutes
+  }),
   cookie: { secure: NODE_ENV === 'production', httpOnly: true, maxAge: 10 * 60 * 1000 },
 }))
 

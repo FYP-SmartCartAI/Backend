@@ -4,12 +4,17 @@ import { MONGO_URI } from './env.js'
 const connectDB = async () => {
   if (!MONGO_URI) return console.warn('MONGO_URI not set')
   try {
-    // modern mongoose accepts the uri and optional options object; many legacy options are deprecated
-    await mongoose.connect(MONGO_URI)
-    console.log('MongoDB connected')
+    console.log('Attempting background connection to MongoDB Atlas...')
+    
+    // Disable operation buffering so queries fail fast instead of freezing threads
+    await mongoose.connect(MONGO_URI, {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 5000 // Timeout quickly (5s) if cluster is unreachable
+    })
+    
+    console.log('MongoDB connected successfully ✅')
   } catch (err) {
-    console.error('MongoDB connection error:', err.message)
-    // Don't exit immediately in dev - let the server run for easier debugging
+    console.error('MongoDB connection error ❌:', err.message)
   }
 }
 

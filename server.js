@@ -73,7 +73,7 @@ app.use(
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const allowedOrigins = [
   CLIENT_URL,
-  'https://frontend-laiaklog2-mrashidr253-4015s-projects.vercel.app'
+  'https://frontend-zb3l.vercel.app'
 ]
 
 const corsOptions = {

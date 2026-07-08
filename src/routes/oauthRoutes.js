@@ -54,14 +54,15 @@ router.get(
  *       302:
  *         description: Redirect to frontend with JWT token
  */
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: `${CLIENT_URL}/login?error=oauth_failed`,
-  }),
-  oauthController.googleCallback,
-)
+router.get('/google/callback', (req, res, next) => {
+  passport.authenticate('google', { session: false }, (err, user, info) => {
+    if (err || !user) {
+      return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`)
+    }
+    req.user = user
+    oauthController.googleCallback(req, res)
+  })(req, res, next)
+})
 
 /**
  * @swagger
@@ -104,14 +105,15 @@ router.get(
  *       302:
  *         description: Redirect to frontend with JWT token
  */
-router.get(
-  '/facebook/callback',
-  passport.authenticate('facebook', {
-    session: false,
-    failureRedirect: `${CLIENT_URL}/login?error=oauth_failed`,
-  }),
-  oauthController.facebookCallback,
-)
+router.get('/facebook/callback', (req, res, next) => {
+  passport.authenticate('facebook', { session: false }, (err, user, info) => {
+    if (err || !user) {
+      return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`)
+    }
+    req.user = user
+    oauthController.facebookCallback(req, res)
+  })(req, res, next)
+})
 
 /**
  * @swagger

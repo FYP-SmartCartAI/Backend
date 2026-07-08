@@ -71,10 +71,27 @@ app.use(
 )
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  CLIENT_URL,
+  'https://frontend-laiaklog2-mrashidr253-4015s-projects.vercel.app'
+]
+
 const corsOptions = {
-  origin: NODE_ENV === 'production'
-    ? CLIENT_URL
-    : true,
+  origin: (origin, callback) => {
+    if (!origin || NODE_ENV !== 'production') {
+      return callback(null, true)
+    }
+    
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.vercel.app') || 
+                      origin.startsWith('http://localhost')
+                      
+    if (isAllowed) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
 }
 app.use(cors(corsOptions))

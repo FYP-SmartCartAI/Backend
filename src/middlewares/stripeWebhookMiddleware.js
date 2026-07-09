@@ -14,7 +14,12 @@ export const verifyStripeSignature = (req, res, next) => {
     req.stripeEvent = event
     next()
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message)
+    console.error('Webhook signature verification failed:', err.message, {
+      bodyType: typeof req.body,
+      isBuffer: Buffer.isBuffer(req.body),
+      secretPrefix: STRIPE_WEBHOOK_SECRET ? STRIPE_WEBHOOK_SECRET.substring(0, 10) : 'undefined',
+      bodyLength: req.body ? req.body.length : 0
+    })
     return res.status(STATUS.BAD_REQUEST).send(ERRORS.STRIPE_WEBHOOK_ERROR(err.message))
   }
 }

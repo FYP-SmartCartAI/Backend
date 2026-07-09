@@ -1,6 +1,6 @@
 import paymentService from '../services/paymentService.js'
 import { STATUS, ERRORS } from '../constants/httpConstants.js'
-import { NODE_ENV } from '../config/env.js'
+import { NODE_ENV, STRIPE_SECRET_KEY } from '../config/env.js'
 import stripe from '../config/stripe.js'
 
 export const createIntent = async (req, res, next) => {
@@ -22,9 +22,12 @@ export const webhook = async (req, res, next) => {
 
 // DEV-ONLY: auto-confirm a PaymentIntent with a test card so the webhook fires
 // without needing to run `stripe payment_intents confirm` in the CLI.
-// Blocked in production — returns 404 so it's invisible to real users.
+// Allowed in production ONLY if using a Stripe test mode key (sk_test_...) for staging.
 export const devConfirm = async (req, res, next) => {
-  if (NODE_ENV === 'production') return res.status(STATUS.NOT_FOUND).end()
+  const isTestKey = STRIPE_SECRET_KEY && STRIPE_SECRET_KEY.startsWith('sk_test_')
+  if (NODE_ENV === 'production' && !isTestKey) {
+    return res.status(STATUS.NOT_FOUND).end()
+  }
   try {
     const { intentId } = req.params
     const pi = await stripe.paymentIntents.confirm(intentId, {

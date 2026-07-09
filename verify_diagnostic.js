@@ -1,50 +1,66 @@
 import fs from 'fs'
-import Stripe from 'stripe'
-import 'dotenv/config'
+import crypto from 'crypto'
 
 try {
   if (!fs.existsSync('webhook_debug.json')) {
-    console.error('Error: webhook_debug.json not found. Run a payment checkout first to generate it!')
+    console.error('Error: webhook_debug.json not found.')
     process.exit(1)
   }
 
   const data = JSON.parse(fs.readFileSync('webhook_debug.json', 'utf8'))
+  const payload = data.bodyString
+  const header = data.signature
+  const secret = data.secret
+
+  console.log('=== Raw Cryptographic Diagnostic ===')
+  console.log('Secret:', secret)
+  console.log('Header:', header)
   
-  // Use STRIPE_SECRET_KEY from environment or a dummy value
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy'
-  const stripe = new Stripe(stripeSecretKey)
+  // Parse signature header
+  const parts = header.split(',')
+  const t = parts.find(p => p.startsWith('t=')).split('=')[1]
+  const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1]
+  const v0 = parts.find(p => p.startsWith('v0='))?.split('=')[1]
 
-  console.log('=== Stripe Webhook Diagnostic ===')
-  console.log('Webhook Secret:', data.secret)
-  console.log('Signature Header:', data.signature)
-  console.log('Received Body Length (bytes):', data.bodyLength)
-  console.log('Received Body isBuffer equivalent length:', Buffer.byteLength(data.bodyString, 'utf8'))
+  console.log('\n--- Signatures in Header ---')
+  console.log('Timestamp (t):', t)
+  console.log('Received v1:', v1)
+  console.log('Received v0:', v0)
 
-  // Test 1: Original body string as received
-  try {
-    stripe.webhooks.signature.verifyHeader(data.bodyString, data.signature, data.secret)
-    console.log('✅ Test 1 (Original received body): SIGNATURE MATCHED!')
-  } catch (err) {
-    console.log('❌ Test 1 (Original received body): FAILED -', err.message)
-  }
+  // 1. Expected signature on original payload
+  const signedPayloadOriginal = `${t}.${payload}`
+  const expectedV1Original = crypto.createHmac('sha256', secret).update(signedPayloadOriginal).digest('hex')
+  const expectedV0Original = crypto.createHmac('sha256', secret).update(signedPayloadOriginal).digest('hex') // v0 uses same algorithm, check if different key
+  console.log('\n--- Test 1: Original Payload ---')
+  console.log('Expected v1:', expectedV1Original)
+  console.log('Matches v1:', expectedV1Original === v1)
+  console.log('Matches v0:', expectedV1Original === v0)
 
-  // Test 2: Minified body string (removing all pretty-printing whitespace/newlines)
-  try {
-    const minified = JSON.stringify(JSON.parse(data.bodyString))
-    stripe.webhooks.signature.verifyHeader(minified, data.signature, data.secret)
-    console.log('✅ Test 2 (Minified/Compact JSON): SIGNATURE MATCHED!')
-  } catch (err) {
-    console.log('❌ Test 2 (Minified/Compact JSON): FAILED -', err.message)
-  }
+  // 2. Expected signature on minified payload
+  const minified = JSON.stringify(JSON.parse(payload))
+  const signedPayloadMinified = `${t}.${minified}`
+  const expectedV1Minified = crypto.createHmac('sha256', secret).update(signedPayloadMinified).digest('hex')
+  console.log('\n--- Test 2: Minified Payload ---')
+  console.log('Minified Payload Length:', minified.length)
+  console.log('Expected v1:', expectedV1Minified)
+  console.log('Matches v1:', expectedV1Minified === v1)
 
-  // Test 3: Normalizing line endings to CRLF (\r\n)
-  try {
-    const crlf = data.bodyString.replace(/\r?\n/g, '\r\n')
-    stripe.webhooks.signature.verifyHeader(crlf, data.signature, data.secret)
-    console.log('✅ Test 3 (CRLF line endings normalized): SIGNATURE MATCHED!')
-  } catch (err) {
-    console.log('❌ Test 3 (CRLF line endings normalized): FAILED -', err.message)
-  }
+  // 3. Expected signature on CRLF normalized payload
+  const crlf = payload.replace(/\r?\n/g, '\r\n')
+  const signedPayloadCrlf = `${t}.${crlf}`
+  const expectedV1Crlf = crypto.createHmac('sha256', secret).update(signedPayloadCrlf).digest('hex')
+  console.log('\n--- Test 3: CRLF Normalized Payload ---')
+  console.log('Expected v1:', expectedV1Crlf)
+  console.log('Matches v1:', expectedV1Crlf === v1)
+
+  // 4. Expected signature on double-space to tab replacement
+  const tabs = payload.replace(/  /g, '\t')
+  const signedPayloadTabs = `${t}.${tabs}`
+  const expectedV1Tabs = crypto.createHmac('sha256', secret).update(signedPayloadTabs).digest('hex')
+  console.log('\n--- Test 4: Tab Indented Payload ---')
+  console.log('Expected v1:', expectedV1Tabs)
+  console.log('Matches v1:', expectedV1Tabs === v1)
+
 } catch (err) {
-  console.error('Error running diagnostic:', err.message)
+  console.error('Error:', err.message)
 }

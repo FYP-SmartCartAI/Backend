@@ -20,7 +20,9 @@ export const verifyStripeSignature = (req, res, next) => {
       secretPrefix: STRIPE_WEBHOOK_SECRET ? STRIPE_WEBHOOK_SECRET.substring(0, 10) : 'undefined',
       secretSuffix: STRIPE_WEBHOOK_SECRET ? STRIPE_WEBHOOK_SECRET.slice(-5) : 'undefined',
       secretLength: STRIPE_WEBHOOK_SECRET ? STRIPE_WEBHOOK_SECRET.length : 0,
-      bodyLength: req.body ? req.body.length : 0
+      bodyLength: req.body ? req.body.length : 0,
+      bodyString: req.body ? req.body.toString('utf8').substring(0, 500) : 'empty',
+      headers: req.headers
     })
     return res.status(STATUS.BAD_REQUEST).send(ERRORS.STRIPE_WEBHOOK_ERROR(err.message))
   }

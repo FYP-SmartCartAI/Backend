@@ -1,4 +1,5 @@
 import express from 'express'
+import fs from 'fs'
 import { STRIPE_WEBHOOK_SECRET } from '../config/env.js'
 import stripe from '../config/stripe.js'
 import { STATUS, ERRORS } from '../constants/httpConstants.js'
@@ -14,6 +15,19 @@ export const verifyStripeSignature = (req, res, next) => {
     req.stripeEvent = event
     next()
   } catch (err) {
+    // Write full details to a local debug file on the server
+    try {
+      fs.writeFileSync('webhook_debug.json', JSON.stringify({
+        secret: STRIPE_WEBHOOK_SECRET,
+        signature: sig,
+        bodyString: req.body ? req.body.toString('utf8') : '',
+        bodyLength: req.body ? req.body.length : 0,
+        errorMessage: err.message
+      }, null, 2))
+    } catch (writeErr) {
+      console.error('Failed to write webhook debug file:', writeErr.message)
+    }
+
     console.error('Webhook signature verification failed:', err.message, {
       bodyType: typeof req.body,
       isBuffer: Buffer.isBuffer(req.body),
